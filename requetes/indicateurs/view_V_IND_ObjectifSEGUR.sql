@@ -4,21 +4,21 @@ CREATE OR ALTER VIEW DLAB_002.V_IND_ObjectifSEGUR AS
 
 /*
 Contexte : Vue calculant les objectifs SEGUR autour du ROR
-Version de la vue : 0.3
-Note de la dernière évolution : ajout des chiffres de la région Grand Est
+Version de la vue : 2.0
+Note de la dernière évolution : Modification de la requête pour calcul des objectifs 2023-2024
 Sources : 
   - T_IND_SuiviPeuplementROR_HISTO (DATALAB)
   - VTEMP_IND_SynchroRORVT_HISTO (DATALAB)
   - V_IND_SuiviPeuplementROR (DATALAB)
 Vue utilisée par :
   - Suivi_Peuplement_VFD (PowerBI)
-Evolutions à venir : Remplacement de la source VTEMP_IND_SynchroRORVT_HISTO lorsqu'elle aura été créée
 */
 
 WITH peuplement AS (
 SELECT 
 	DT_Reference
 	, CodeRegion
+	, ChampActivite
 	, SUM(NB_EG_PerimetreFiness) AS NB_EG_PerimetreFiness
 	, SUM(NB_EG_PeuplementFinalise) AS NB_EG_PeuplementFinalise
 	, CASE 
@@ -26,113 +26,127 @@ SELECT
 		ELSE SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL)
 	END AS DC_TauxPeuplement
 	, CASE 
-		WHEN DT_Reference <> '2022-06-30' THEN NULL
-		WHEN SUM(NB_EG_PerimetreFiness) = 0 THEN 0.3
-		WHEN SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL) < 0.6
-			THEN SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL) + 0.3
-		ELSE NULL
+		WHEN SUM(NB_EG_PerimetreFiness) = 0 THEN 0.85
+		WHEN SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL) >= 0.95
+			THEN 1.0
+		WHEN ROUND(SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL),2) >= 0.85
+			THEN SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL) + 0.05
+		ELSE 0.85
 	 END AS DC_ObjectifSEGUR
 FROM DATALAB.DLAB_002.T_IND_SuiviPeuplementROR_HISTO
-WHERE ChampActivite in ('PA','PH') AND TypePerimetre = 'Périmètre historique'
-GROUP BY DT_Reference, CodeRegion
+WHERE ChampActivite in ('PA','PH','MCO','PSY') AND TypePerimetre = 'Périmètre historique'
+AND DT_Reference = '2023-06-30'
+GROUP BY DT_Reference, CodeRegion, ChampActivite
 )
 
-, synchronisation AS (
-SELECT 
+, SI_APA AS (
+	SELECT CodeRegion, CodeDepartement, CodeCategorieEG_FINESS, NumFINESS_EG, 'Pilotes' AS TypeDepartement
+	FROM DATALAB.DLAB_002.V_DIM_AutorisationFINESS
+	WHERE CodeDepartement IN ('07','80','64','65','66') AND CodeCategorieEG_FINESS IN ('209','460')
+	UNION ALL
+	SELECT CodeRegion, CodeDepartement, CodeCategorieEG_FINESS, NumFINESS_EG, 'Vague 1'
+	FROM DATALAB.DLAB_002.V_DIM_AutorisationFINESS
+	WHERE CodeDepartement IN ('46','73','85','89','973') AND CodeCategorieEG_FINESS IN ('209','460')
+)
+
+, synchronisationVT AS (
+SELECT
 	DT_Reference
 	, CodeRegion
-	, SUM(NB_EG_PerimetreSynchroVT_Calcule) AS NB_EG_PerimetreSynchroVT_Calcule
-	, SUM(NB_EG_SynchronisationFinalise) AS NB_EG_SynchronisationFinalise
+	, Domaine
+	, SUM(NB_EG_PerimetreVT) AS NB_EG_PerimetreSynchronisation
+	, ISNULL(SUM(NB_EG_SynchronisationFinalise),0) AS NB_EG_SynchronisationFinalise
 	, CASE 
-		WHEN SUM(NB_EG_PerimetreSynchroVT_Calcule) = 0 THEN 0
-		ELSE SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreSynchroVT_Calcule) as DECIMAL)
+		WHEN SUM(NB_EG_PerimetreVT) = 0 THEN 0
+		ELSE ISNULL(SUM(NB_EG_SynchronisationFinalise),0) / CAST(SUM(NB_EG_PerimetreVT) as DECIMAL)
 	END AS DC_TauxSynchronisation
 	, CASE 
-		WHEN DT_Reference <> '2022-06-30' THEN NULL
-		WHEN SUM(NB_EG_PerimetreSynchroVT_Calcule) = 0 THEN 0.3
-		WHEN SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreSynchroVT_Calcule) as DECIMAL) > 0.7 
-			THEN 1
-		ELSE SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreSynchroVT_Calcule) as DECIMAL) + 0.3
+		WHEN SUM(NB_EG_PerimetreVT) = 0 THEN 0
+		WHEN ISNULL(SUM(NB_EG_SynchronisationFinalise),0) / CAST(SUM(NB_EG_PerimetreVT) as DECIMAL) >= 0.95
+			THEN 1.0
+		WHEN ROUND(ISNULL(SUM(NB_EG_SynchronisationFinalise),0) / CAST(SUM(NB_EG_PerimetreVT) as DECIMAL),2) >= 0.5
+			THEN ISNULL(SUM(NB_EG_SynchronisationFinalise),0) / CAST(SUM(NB_EG_PerimetreVT) as DECIMAL) + 0.05
+		ELSE 0.5
 	 END AS DC_ObjectifSEGUR
 FROM DATALAB.DLAB_002.T_IND_SynchroRORVT_HISTO
-WHERE Domaine in ('Grand Age','Handicap')
-GROUP BY DT_Reference,CodeRegion
+WHERE DT_Reference = '2023-06-30' ANd Domaine IN ('Grand Age','Handicap')
+GROUP BY DT_Reference, CodeRegion, Domaine
 )
 
 SELECT 
 	peuplement.CodeRegion
-	, 'II.3.D.2' AS ReferenceObjectifSEGUR
+	, CASE 
+		WHEN ChampActivite IN ('PA','PH') THEN CONCAT('2.3d ESMS ',ChampActivite)
+		ELSE CONCAT('2.3d ES ',ChampActivite)
+	END AS ReferenceObjectifSEGUR
 	, 'Peuplement ROR' AS LibelleObjectifSEGUR
+	, '2023-2024' AS AnneObjectifSEGUR
+	, NULL AS CodeDepartement
 	, peuplement.NB_EG_PerimetreFiness AS NB_EG_PerimetreReference
 	, peuplement.NB_EG_PeuplementFinalise AS NB_EG_FinaliseReference
 	, peuplement.DC_TauxPeuplement AS DC_TauxReference
 	, peuplement.DC_ObjectifSEGUR
-	, CASE WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
-		ELSE peuplement_actuel.NB_EG_PerimetreFiness END AS NB_EG_PerimetreActuel
-	, CASE WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
-		ELSE peuplement_actuel.NB_EG_PeuplementFinalise END AS NB_EG_FinaliseActuel
-	, CASE WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
-		ELSE peuplement_actuel.DC_TauxPeuplement END AS DC_TauxActuel
 	, CASE 
 		WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
-		WHEN peuplement_actuel.DC_TauxPeuplement >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
-		ELSE ROUND((peuplement_actuel.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement_actuel.NB_EG_PeuplementFinalise,0)
+		WHEN ROUND(peuplement.DC_TauxPeuplement,2) >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
+		ELSE CEILING((peuplement.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement.NB_EG_PeuplementFinalise)
 	  END AS NB_ResteAFaireActuel
 FROM peuplement
-LEFT JOIN peuplement AS peuplement_t1_2023
-	ON peuplement.CodeRegion = peuplement_t1_2023.CodeRegion AND peuplement_t1_2023.DT_Reference = '2023-03-31'
-LEFT JOIN (
-	SELECT 
-		CodeRegion
-		-- Ajout des chiffres au 31/05/2023 pour les régions NAQ et GES
-		, CASE WHEN CodeRegion = '75' THEN 2463
-			WHEN CodeRegion = '44' THEN 909
-			ELSE SUM(NB_EG_PeuplementFinalise) END AS NB_EG_PeuplementFinalise
-		, CASE WHEN CodeRegion = '75' THEN 2557
-			ELSE SUM(NB_EG_PerimetreFiness) END AS NB_EG_PerimetreFiness
-		, CASE WHEN CodeRegion = '75' THEN 2463/CAST(2557 AS DECIMAL)
-			WHEN CodeRegion = '44' THEN 909 / CAST(SUM(NB_EG_PerimetreFiness) AS DECIMAL)
-			ELSE SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) AS DECIMAL) END AS DC_TauxPeuplement
-	FROM DATALAB.DLAB_002.V_IND_SuiviPeuplementROR
-	WHERE ChampActivite in ('PA','PH') 
-		AND TypePerimetre = 'Périmètre historique' 
-		AND CodeRegion in ('01','03','04','06','11','27','28','32','44','52','75','76','84','94') 
-	GROUP BY CodeRegion
-) AS peuplement_actuel
-	ON peuplement.CodeRegion = peuplement_actuel.CodeRegion
-WHERE peuplement.DT_Reference = '2022-06-30'
 UNION ALL
 SELECT 
-	synchronisation.CodeRegion
-	, 'II.3.D.3'
+	SI_APA.CodeRegion
+	, '2.3d SI APA'
+	, 'Peuplement ROR'
+	, '2023-2024'
+	, SI_APA.CodeDepartement
+	, COUNT(SI_APA.NumFINESS_EG)
+	, COUNT(CASE WHEN StatutPeuplement = 'Finalise' THEN peuplement.NumFINESS_EG END)
+	, CASE 
+		WHEN COUNT(SI_APA.NumFINESS_EG) = 0 THEN 0
+		ELSE COUNT(CASE WHEN StatutPeuplement = 'Finalise' THEN peuplement.NumFINESS_EG END) / CAST(COUNT(SI_APA.NumFINESS_EG) AS decimal)
+	END
+	, CASE WHEN COUNT(SI_APA.NumFINESS_EG) = 0 THEN 0 ELSE MAX(1.0) END
+	, COUNT(SI_APA.NumFINESS_EG) - COUNT(CASE WHEN StatutPeuplement = 'Finalise' THEN peuplement.NumFINESS_EG END)
+FROM SI_APA
+LEFT JOIN DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_EG AS peuplement
+	ON SI_APA.NumFINESS_EG = peuplement.NumFINESS_EG
+GROUP BY SI_APA.CodeRegion, SI_APA.CodeDepartement
+UNION ALL
+SELECT 
+	CodeRegion
+	,CONCAT('2.3e ',Domaine)
 	, 'Synchronisation ROR/VT'
-	, synchronisation.NB_EG_PerimetreSynchroVT_Calcule
-	, synchronisation.NB_EG_SynchronisationFinalise
-	, synchronisation.DC_TauxSynchronisation
-	, synchronisation.DC_ObjectifSEGUR
-	, synchro_actuel.NB_EG_PerimetreSynchroVT_Calcule
-	, synchro_actuel.NB_EG_SynchronisationFinalise
-	, synchro_actuel.DC_TauxSynchronisation
-	,  CASE
-		WHEN ROUND(synchro_actuel.DC_TauxSynchronisation,2) >= ROUND(synchronisation.DC_ObjectifSEGUR,2) THEN 0
-		ELSE ROUND((synchro_actuel.NB_EG_PerimetreSynchroVT_Calcule * synchronisation.DC_ObjectifSEGUR) - synchro_actuel.NB_EG_SynchronisationFinalise,0)
+	, '2023-2024'
+	, NULL
+	, NB_EG_PerimetreSynchronisation
+	, NB_EG_SynchronisationFinalise
+	, DC_TauxSynchronisation
+	, DC_ObjectifSEGUR
+	, CASE 
+		WHEN DC_ObjectifSEGUR IS NULL THEN NULL
+		WHEN ROUND(DC_TauxSynchronisation,2) >= ROUND(DC_ObjectifSEGUR,2) THEN 0
+		ELSE CEILING((NB_EG_PerimetreSynchronisation * DC_ObjectifSEGUR) - NB_EG_SynchronisationFinalise)
 	  END
-FROM synchronisation
-LEFT JOIN synchronisation AS synchro_t1_2023
-	ON synchronisation.CodeRegion = synchro_t1_2023.CodeRegion 
-	AND synchro_t1_2023.DT_Reference = '2023-03-31'
-LEFT JOIN (
-	SELECT
-		CodeRegion
-		, SUM(NB_EG_PerimetreSynchroVT_Calcule) AS NB_EG_PerimetreSynchroVT_Calcule
-		, SUM(NB_EG_SynchronisationFinalise) AS NB_EG_SynchronisationFinalise
-		, CASE 
-			WHEN SUM(NB_EG_PerimetreSynchroVT_Calcule) = 0 THEN 0
-			ELSE SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreSynchroVT_Calcule) as DECIMAL)
-		END AS DC_TauxSynchronisation
-	FROM DATALAB.DLAB_002.V_IND_SynchroRORVT
-	WHERE Domaine in ('Grand Age','Handicap')
-	GROUP BY CodeRegion
-) AS synchro_actuel
-	ON synchronisation.CodeRegion = synchro_actuel.CodeRegion 
-WHERE synchronisation.DT_Reference = '2022-06-30'
+FROM synchronisationVT
+UNION ALL
+SELECT 
+	CodeRegion
+	, '2.3e SI APA'
+	, 'Synchronisation ROR/VT'
+	, '2023-2024'
+	, CodeDepartement
+	, SUM(NB_EG_PerimetreROR)
+	, SUM(NB_EG_SynchronisationFinalise)
+	, CASE 
+		WHEN SUM(NB_EG_PerimetreROR) = 0 THEN 0
+		ELSE SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreROR) AS decimal)
+	END
+	, CASE WHEN SUM(NB_EG_PerimetreROR) = 0 THEN 0 ELSE MAX(0.8) END
+	, CASE 
+		WHEN SUM(NB_EG_PerimetreROR) = 0 THEN NULL
+		WHEN ROUND(SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreROR) AS decimal),2) >= 0.8 THEN 0
+		ELSE CEILING((SUM(NB_EG_PerimetreROR) * 0.8) - SUM(NB_EG_SynchronisationFinalise))
+	  END
+FROM DATALAB.DLAB_002.T_IND_SynchroRORVT_HISTO
+WHERE TypePerimetre = 'SI APA' AND CodeDepartement IN ('07','80','64','65','66') AND DT_Reference = '2023-09-30'
+GROUP BY CodeRegion, CodeDepartement

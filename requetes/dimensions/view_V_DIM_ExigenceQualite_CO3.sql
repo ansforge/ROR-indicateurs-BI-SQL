@@ -7,7 +7,7 @@ WITH OrganisationInterneSensible AS (
         OrganisationInterne.ID_OrganisationInterne
         ,OrganisationInterne.FK_EntiteGeographique
 		,OrganisationInterne.CodeRegion
-		-- Code Département de l'EG car le gestionnaire ROR est rattaché à l'établissement
+		-- Code Departement de l'EG car le gestionnaire ROR est rattache a l'etablissement
 		,EntiteGeographique.CodeDepartement
         ,OrganisationInterne.CodeNOS_TypeOI
         ,OrganisationInterne.NomOI
@@ -63,7 +63,7 @@ WITH OrganisationInterneSensible AS (
         ,Offre.UniteSensible
         ,CASE WHEN CodeNOS_ActiviteOperationnelle IS NOT NULL THEN 'O' ELSE 'N' END AS FG_AO_MedecinePenitentiaire
     FROM OrganisationInterneSensible 
-    LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_OrganisationInterne as Offre
+    INNER JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_OrganisationInterne as Offre
         ON OrganisationInterneSensible.UniqueID = Offre.UniqueID_OIParente
 		AND OrganisationInterneSensible.CodeRegion = Offre.CodeRegion
     LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_ActiviteOperationnelle AS ActiviteOperationnelle

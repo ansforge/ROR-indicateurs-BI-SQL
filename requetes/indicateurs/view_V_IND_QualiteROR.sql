@@ -3,6 +3,8 @@ GO
 
 CREATE OR ALTER VIEW DLAB_002.V_IND_QualiteROR AS
 
+
+
 WITH aggregation AS (
 -- Exigence Qualite EX1.2
 SELECT
@@ -238,8 +240,8 @@ GROUP BY CO4.CodeRegion, EntiteGeographique.CodeDepartement, NOSCategorieEG.Doma
 )
 
 SELECT 
-	CONCAT(ID_IndicateurQualiteROR,'|',CAST(DATEADD(wk, DATEDIFF(wk, 0, GETDATE()), 0) AS date)) AS ID_IndicateurQualiteROR
-	,CAST(DATEADD(wk, DATEDIFF(wk, 0, GETDATE()), 0) AS date) AS DT_Reference
+	CONCAT(ID_IndicateurQualiteROR,'|',CAST(DATEADD(dd, -(DATEPART(dw, GETDATE()) + @@DATEFIRST -2) % 7,GETDATE()) AS date)) AS ID_IndicateurQualiteROR
+	,CAST(DATEADD(dd, -(DATEPART(dw, GETDATE()) + @@DATEFIRST -2) % 7,GETDATE()) AS date) AS DT_Reference
 	,'hebdomadaire' AS Periodicite
 	,CodeExigence
 	,CodeRegion
@@ -251,8 +253,8 @@ SELECT
 FROM aggregation
 UNION ALL
 SELECT
-	CONCAT(CodeExigence,'|00|-3|',DomaineROR,'|',CAST(DATEADD(wk, DATEDIFF(wk, 0, GETDATE()), 0) AS date))
-	,CAST(DATEADD(wk, DATEDIFF(wk, 0, GETDATE()), 0) AS date)
+	CONCAT(CodeExigence,'|00|-3|',DomaineROR,'|',CAST(DATEADD(dd, -(DATEPART(dw, GETDATE()) + @@DATEFIRST -2) % 7,GETDATE()) AS date))
+	,CAST(DATEADD(dd, -(DATEPART(dw, GETDATE()) + @@DATEFIRST -2) % 7,GETDATE()) AS date)
 	,'hebdomadaire'
 	,CodeExigence
 	,'00'

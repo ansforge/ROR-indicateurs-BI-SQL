@@ -3,9 +3,7 @@ GO
 CREATE OR ALTER VIEW DLAB_002.V_IND_ObjectifSEGUR AS
 
 /*
-Contexte : Vue calculant les objectifs SEGUR autour du ROR
-Version de la vue : 2.0
-Note de la dernière évolution : Modification de la requête pour calcul des objectifs 2023-2024
+Description : Vue d'agregation permettant de calculer les objectifs SEGUR sur les indicateurs ROR et synchronisationVT
 Sources : 
   - T_IND_SuiviPeuplementROR_HISTO (DATALAB)
   - VTEMP_IND_SynchroRORVT_HISTO (DATALAB)
@@ -35,21 +33,37 @@ SELECT
 	 END AS DC_ObjectifSEGUR
 FROM DATALAB.DLAB_002.T_IND_SuiviPeuplementROR_HISTO
 WHERE ChampActivite in ('PA','PH','MCO','PSY') AND TypePerimetre = 'Périmètre historique'
-AND DT_Reference = '2023-06-30'
 GROUP BY DT_Reference, CodeRegion, ChampActivite
 )
 
-, SI_APA AS (
-	SELECT CodeRegion, CodeDepartement, CodeCategorieEG_FINESS, NumFINESS_EG, 'Pilotes' AS TypeDepartement
-	FROM DATALAB.DLAB_002.V_DIM_AutorisationFINESS
-	WHERE CodeDepartement IN ('07','80','64','65','66') AND CodeCategorieEG_FINESS IN ('209','460')
-	UNION ALL
-	SELECT CodeRegion, CodeDepartement, CodeCategorieEG_FINESS, NumFINESS_EG, 'Vague 1'
-	FROM DATALAB.DLAB_002.V_DIM_AutorisationFINESS
-	WHERE CodeDepartement IN ('46','73','85','89','973') AND CodeCategorieEG_FINESS IN ('209','460')
+, perimetre_SI_APA AS (
+SELECT 
+	DT_Reference
+	, CodeRegion
+	, CodeDepartement
+	, SUM(NB_EG_PerimetreFiness) AS NB_EG_PerimetreFiness
+FROM DATALAB.DLAB_002.T_IND_ImportPerimetreSI_APA
+GROUP BY DT_Reference, CodeRegion, CodeDepartement
 )
 
-, synchronisationVT AS (
+, peuplement_SI_APA AS (
+SELECT 
+	DT_Reference
+	, CodeRegion
+	, CodeDepartement
+	, SUM(NB_EG_PerimetreFiness) AS NB_EG_PerimetreFiness
+	, SUM(NB_EG_PeuplementFinalise) AS NB_EG_PeuplementFinalise
+	, CASE 
+		WHEN SUM(NB_EG_PerimetreFiness) = 0 THEN 0
+		ELSE SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL)
+	END AS DC_TauxPeuplement
+FROM DATALAB.DLAB_002.V_IND_SuiviPeuplementROR
+WHERE CodeCategorieEG IN ('209','460') 
+	AND CodeDepartement IN ('07','80','64','65','66','46','73','85','89','973')
+GROUP BY DT_Reference, CodeRegion, CodeDepartement
+)
+
+,synchronisationVT AS (
 SELECT
 	DT_Reference
 	, CodeRegion
@@ -69,84 +83,145 @@ SELECT
 		ELSE 0.5
 	 END AS DC_ObjectifSEGUR
 FROM DATALAB.DLAB_002.T_IND_SynchroRORVT_HISTO
-WHERE DT_Reference = '2023-06-30' ANd Domaine IN ('Grand Age','Handicap')
+WHERE Domaine IN ('Grand Age','Handicap') AND TypePerimetre = 'Historique'
 GROUP BY DT_Reference, CodeRegion, Domaine
 )
 
+, synchronisationVT_SI_APA AS (
+	SELECT
+		DT_Reference
+		, CodeRegion
+		, CodeDepartement
+		, SUM(NB_EG_PerimetreROR) AS NB_EG_PerimetreSynchronisation
+		, ISNULL(SUM(NB_EG_SynchronisationFinalise),0) AS NB_EG_SynchronisationFinalise
+		, CASE 
+			WHEN SUM(NB_EG_PerimetreROR) = 0 THEN 0
+			ELSE SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreROR) AS decimal)
+		END AS DC_TauxSynchronisation
+	FROM DATALAB.DLAB_002.T_IND_SynchroRORVT_HISTO
+	WHERE TypePerimetre = 'Domicile' AND CodeDepartement IN ('07','80','64','65','66')
+	GROUP BY DT_Reference, CodeRegion, CodeDepartement
+)
+
+-- Objectifs SEGUR ROR perimetre historique
 SELECT 
 	peuplement.CodeRegion
 	, CASE 
-		WHEN ChampActivite IN ('PA','PH') THEN CONCAT('2.3d ESMS ',ChampActivite)
-		ELSE CONCAT('2.3d ES ',ChampActivite)
+		WHEN peuplement.ChampActivite IN ('PA','PH') THEN CONCAT('2.3d ESMS ',peuplement.ChampActivite)
+		ELSE CONCAT('2.3d ES ',peuplement.ChampActivite)
 	END AS ReferenceObjectifSEGUR
 	, 'Peuplement ROR' AS LibelleObjectifSEGUR
 	, '2023-2024' AS AnneObjectifSEGUR
-	, NULL AS CodeDepartement
+	, '-3' AS CodeDepartement
 	, peuplement.NB_EG_PerimetreFiness AS NB_EG_PerimetreReference
 	, peuplement.NB_EG_PeuplementFinalise AS NB_EG_FinaliseReference
 	, peuplement.DC_TauxPeuplement AS DC_TauxReference
 	, peuplement.DC_ObjectifSEGUR
+	, peuplement_actuel.NB_EG_PerimetreFiness AS NB_EG_PerimetreActuel
+	, peuplement_actuel.NB_EG_PeuplementFinalise AS NB_EG_FinaliseActuel
+	, peuplement_actuel.DC_TauxPeuplement AS DC_TauxActuel
 	, CASE 
 		WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
-		WHEN ROUND(peuplement.DC_TauxPeuplement,2) >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
-		ELSE CEILING((peuplement.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement.NB_EG_PeuplementFinalise)
+		WHEN ROUND(peuplement_actuel.DC_TauxPeuplement,2) >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
+		ELSE CEILING((peuplement_actuel.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement_actuel.NB_EG_PeuplementFinalise)
 	  END AS NB_ResteAFaireActuel
 FROM peuplement
+LEFT JOIN peuplement AS peuplement_actuel
+	ON peuplement.CodeRegion = peuplement_actuel.CodeRegion AND peuplement.ChampActivite = peuplement_actuel.ChampActivite 
+	AND peuplement_actuel.DT_Reference = '2023-09-30'
+WHERE peuplement.DT_Reference = '2023-06-30'
+-- Objectifs SEGUR ROR SI APA
 UNION ALL
 SELECT 
-	SI_APA.CodeRegion
+	perimetre_SI_APA.CodeRegion
 	, '2.3d SI APA'
 	, 'Peuplement ROR'
 	, '2023-2024'
-	, SI_APA.CodeDepartement
-	, COUNT(SI_APA.NumFINESS_EG)
-	, COUNT(CASE WHEN StatutPeuplement = 'Finalise' THEN peuplement.NumFINESS_EG END)
+	, perimetre_SI_APA.CodeDepartement
+	, perimetre_SI_APA.NB_EG_PerimetreFiness
+	, NULL
+	, NULL
+	, CASE WHEN perimetre_SI_APA.NB_EG_PerimetreFiness = 0 THEN 0 ELSE 1.0 END
+	, peuplement_SI_APA_actuel.NB_EG_PerimetreFiness
+	, CASE WHEN perimetre_SI_APA.CodeRegion = '75' THEN NULL ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise END
+	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
 	, CASE 
-		WHEN COUNT(SI_APA.NumFINESS_EG) = 0 THEN 0
-		ELSE COUNT(CASE WHEN StatutPeuplement = 'Finalise' THEN peuplement.NumFINESS_EG END) / CAST(COUNT(SI_APA.NumFINESS_EG) AS decimal)
-	END
-	, CASE WHEN COUNT(SI_APA.NumFINESS_EG) = 0 THEN 0 ELSE MAX(1.0) END
-	, COUNT(SI_APA.NumFINESS_EG) - COUNT(CASE WHEN StatutPeuplement = 'Finalise' THEN peuplement.NumFINESS_EG END)
-FROM SI_APA
-LEFT JOIN DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_EG AS peuplement
-	ON SI_APA.NumFINESS_EG = peuplement.NumFINESS_EG
-GROUP BY SI_APA.CodeRegion, SI_APA.CodeDepartement
+		WHEN (perimetre_SI_APA.CodeRegion = '75' OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL
+		WHEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness THEN peuplement_SI_APA_actuel.DC_TauxPeuplement
+		WHEN peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise > perimetre_SI_APA.NB_EG_PerimetreFiness THEN 1.0
+		ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise / CAST(perimetre_SI_APA.NB_EG_PerimetreFiness as DECIMAL) END
+	, CASE
+		WHEN (perimetre_SI_APA.CodeRegion = '75' OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL 
+		WHEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness 
+			AND ROUND(peuplement_SI_APA_actuel.DC_TauxPeuplement,2) < 1.0 
+			THEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness - peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise
+		WHEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness > perimetre_SI_APA.NB_EG_PerimetreFiness 
+			AND ROUND(peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise / CAST(perimetre_SI_APA.NB_EG_PerimetreFiness as DECIMAL),2) < 1.0 
+			THEN perimetre_SI_APA.NB_EG_PerimetreFiness - peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise
+		ELSE 0 END 
+FROM perimetre_SI_APA
+LEFT JOIN peuplement_SI_APA AS peuplement_SI_APA_actuel
+	ON perimetre_SI_APA.CodeDepartement = peuplement_SI_APA_actuel.CodeDepartement
+	AND peuplement_SI_APA_actuel.DT_Reference = '2023-12-31'
+-- Objectifs SEGUR SynchronisationVT perimetre historique
 UNION ALL
 SELECT 
-	CodeRegion
-	,CONCAT('2.3e ',Domaine)
+	synchronisationVT.CodeRegion
+	,CONCAT('2.3e ', synchronisationVT.Domaine)
 	, 'Synchronisation ROR/VT'
 	, '2023-2024'
-	, NULL
-	, NB_EG_PerimetreSynchronisation
-	, NB_EG_SynchronisationFinalise
-	, DC_TauxSynchronisation
-	, DC_ObjectifSEGUR
+	, '-3'
+	, synchronisationVT.NB_EG_PerimetreSynchronisation
+	, synchronisationVT.NB_EG_SynchronisationFinalise
+	, synchronisationVT.DC_TauxSynchronisation
+	, synchronisationVT.DC_ObjectifSEGUR
+	, ISNULL(synchronisationVT_actuel.NB_EG_PerimetreSynchronisation,0)
+	, ISNULL(synchronisationVT_actuel.NB_EG_SynchronisationFinalise,0)
+	, ISNULL(synchronisationVT_actuel.DC_TauxSynchronisation,0)
 	, CASE 
-		WHEN DC_ObjectifSEGUR IS NULL THEN NULL
-		WHEN ROUND(DC_TauxSynchronisation,2) >= ROUND(DC_ObjectifSEGUR,2) THEN 0
-		ELSE CEILING((NB_EG_PerimetreSynchronisation * DC_ObjectifSEGUR) - NB_EG_SynchronisationFinalise)
+		WHEN synchronisationVT.DC_ObjectifSEGUR = 0 THEN 0
+		WHEN ROUND(synchronisationVT_actuel.DC_TauxSynchronisation,2) >= ROUND(synchronisationVT.DC_ObjectifSEGUR,2) THEN 0
+		ELSE CEILING((synchronisationVT_actuel.NB_EG_PerimetreSynchronisation * synchronisationVT.DC_ObjectifSEGUR) - synchronisationVT_actuel.NB_EG_SynchronisationFinalise)
 	  END
 FROM synchronisationVT
+LEFT JOIN synchronisationVT AS synchronisationVT_actuel
+	ON synchronisationVT.CodeRegion = synchronisationVT_actuel.CodeRegion AND synchronisationVT.Domaine = synchronisationVT_actuel.Domaine 
+	AND synchronisationVT_actuel.DT_Reference = '2023-12-31'
+WHERE synchronisationVT.DT_Reference = '2023-06-30'
+-- Objectifs SEGUR SynchronisationVT SI APA
 UNION ALL
 SELECT 
-	CodeRegion
+	synchronisationVT_SI_APA.CodeRegion
 	, '2.3e SI APA'
 	, 'Synchronisation ROR/VT'
 	, '2023-2024'
-	, CodeDepartement
-	, SUM(NB_EG_PerimetreROR)
-	, SUM(NB_EG_SynchronisationFinalise)
+	, synchronisationVT_SI_APA.CodeDepartement
+	, synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation
+	, synchronisationVT_SI_APA.NB_EG_SynchronisationFinalise
+	, synchronisationVT_SI_APA.DC_TauxSynchronisation
+	, CASE WHEN synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation = 0 THEN 0 ELSE 0.8 END AS DC_ObjectifSEGUR
+	, synchronisationVT_SI_APA_actuel.NB_EG_PerimetreSynchronisation
+	, synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise
+	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
 	, CASE 
-		WHEN SUM(NB_EG_PerimetreROR) = 0 THEN 0
-		ELSE SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreROR) AS decimal)
-	END
-	, CASE WHEN SUM(NB_EG_PerimetreROR) = 0 THEN 0 ELSE MAX(0.8) END
+		WHEN synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation = 0 THEN NULL
+		WHEN synchronisationVT_SI_APA_actuel.NB_EG_PerimetreSynchronisation <= synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation 
+			THEN synchronisationVT_SI_APA_actuel.DC_TauxSynchronisation
+		WHEN synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise > synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation THEN 1.0
+		ELSE synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise / CAST(synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation as DECIMAL) END
 	, CASE 
-		WHEN SUM(NB_EG_PerimetreROR) = 0 THEN NULL
-		WHEN ROUND(SUM(NB_EG_SynchronisationFinalise) / CAST(SUM(NB_EG_PerimetreROR) AS decimal),2) >= 0.8 THEN 0
-		ELSE CEILING((SUM(NB_EG_PerimetreROR) * 0.8) - SUM(NB_EG_SynchronisationFinalise))
+		WHEN synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation = 0 THEN NULL
+		WHEN synchronisationVT_SI_APA_actuel.NB_EG_PerimetreSynchronisation <= synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation
+			AND ROUND(synchronisationVT_SI_APA_actuel.DC_TauxSynchronisation,2) < 0.8 
+			THEN CEILING((synchronisationVT_SI_APA_actuel.NB_EG_PerimetreSynchronisation * 0.8) - synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise)
+		WHEN synchronisationVT_SI_APA_actuel.NB_EG_PerimetreSynchronisation > synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation 
+			AND ROUND(synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise / CAST(synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation as DECIMAL),2) < 0.8 
+			THEN CEILING((synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation * 0.8) - synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise)
+		ELSE 0
 	  END
-FROM DATALAB.DLAB_002.T_IND_SynchroRORVT_HISTO
-WHERE TypePerimetre = 'SI APA' AND CodeDepartement IN ('07','80','64','65','66') AND DT_Reference = '2023-09-30'
-GROUP BY CodeRegion, CodeDepartement
+FROM synchronisationVT_SI_APA
+LEFT JOIN synchronisationVT_SI_APA AS synchronisationVT_SI_APA_actuel
+	ON synchronisationVT_SI_APA.CodeRegion = synchronisationVT_SI_APA_actuel.CodeRegion 
+	AND synchronisationVT_SI_APA.CodeDepartement = synchronisationVT_SI_APA_actuel.CodeDepartement 
+	AND synchronisationVT_SI_APA_actuel.DT_Reference = '2023-12-31'
+WHERE synchronisationVT_SI_APA.DT_Reference = '2023-09-30'

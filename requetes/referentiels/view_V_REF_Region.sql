@@ -14,4 +14,22 @@ SELECT
 	'0'
 	,'00'
 	,'National'
-	,'0'
+	,NULL
+UNION ALL
+SELECT
+	'-3'
+	,'-3'
+	,'Non pertinent'
+	,NULL
+UNION ALL
+SELECT
+	'-2'
+	,'-2'
+	,'Non renseigné'
+	,NULL
+UNION ALL
+SELECT
+	'-1'
+	,'-1'
+	,'Non rapproché'
+	,NULL

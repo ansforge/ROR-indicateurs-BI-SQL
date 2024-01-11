@@ -17,7 +17,7 @@ SELECT
 	DT_Reference
 	,Periodicite
 	,CodeRegion
-	,'-2' AS CodeDepartement
+	,CodeDepartement
 	,ChampActivite
 	,CodeCategorieEG
 	,TypePerimetre

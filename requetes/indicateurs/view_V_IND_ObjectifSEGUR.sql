@@ -57,7 +57,7 @@ SELECT
 		WHEN SUM(NB_EG_PerimetreFiness) = 0 THEN 0
 		ELSE SUM(NB_EG_PeuplementFinalise) / CAST(SUM(NB_EG_PerimetreFiness) as DECIMAL)
 	END AS DC_TauxPeuplement
-FROM DATALAB.DLAB_002.V_IND_SuiviPeuplementROR
+FROM DATALAB.DLAB_002.T_IND_SuiviPeuplementROR_HISTO
 WHERE CodeCategorieEG IN ('209','460') 
 	AND CodeDepartement IN ('07','80','64','65','66','46','73','85','89','973')
 GROUP BY DT_Reference, CodeRegion, CodeDepartement
@@ -117,10 +117,11 @@ SELECT
 	, peuplement.NB_EG_PeuplementFinalise AS NB_EG_FinaliseReference
 	, peuplement.DC_TauxPeuplement AS DC_TauxReference
 	, peuplement.DC_ObjectifSEGUR
-	, peuplement_actuel.NB_EG_PerimetreFiness AS NB_EG_PerimetreActuel
-	, peuplement_actuel.NB_EG_PeuplementFinalise AS NB_EG_FinaliseActuel
-	, peuplement_actuel.DC_TauxPeuplement AS DC_TauxActuel
+	, CASE WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL ELSE peuplement_actuel.NB_EG_PerimetreFiness END AS NB_EG_PerimetreActuel
+	, CASE WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL ELSE peuplement_actuel.NB_EG_PeuplementFinalise END AS NB_EG_FinaliseActuel
+	, CASE WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL ELSE peuplement_actuel.DC_TauxPeuplement END AS DC_TauxActuel
 	, CASE 
+		WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL 
 		WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
 		WHEN ROUND(peuplement_actuel.DC_TauxPeuplement,2) >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
 		ELSE CEILING((peuplement_actuel.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement_actuel.NB_EG_PeuplementFinalise)
@@ -128,7 +129,7 @@ SELECT
 FROM peuplement
 LEFT JOIN peuplement AS peuplement_actuel
 	ON peuplement.CodeRegion = peuplement_actuel.CodeRegion AND peuplement.ChampActivite = peuplement_actuel.ChampActivite 
-	AND peuplement_actuel.DT_Reference = '2023-09-30'
+	AND peuplement_actuel.DT_Reference = '2023-12-31'
 WHERE peuplement.DT_Reference = '2023-06-30'
 -- Objectifs SEGUR ROR SI APA
 UNION ALL
@@ -143,15 +144,15 @@ SELECT
 	, NULL
 	, CASE WHEN perimetre_SI_APA.NB_EG_PerimetreFiness = 0 THEN 0 ELSE 1.0 END
 	, peuplement_SI_APA_actuel.NB_EG_PerimetreFiness
-	, CASE WHEN perimetre_SI_APA.CodeRegion = '75' THEN NULL ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise END
+	, CASE WHEN perimetre_SI_APA.CodeRegion IN ('76','02','24','75') THEN NULL ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise END
 	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
 	, CASE 
-		WHEN (perimetre_SI_APA.CodeRegion = '75' OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL
+		WHEN (perimetre_SI_APA.CodeRegion IN ('76','02','24','75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL
 		WHEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness THEN peuplement_SI_APA_actuel.DC_TauxPeuplement
 		WHEN peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise > perimetre_SI_APA.NB_EG_PerimetreFiness THEN 1.0
 		ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise / CAST(perimetre_SI_APA.NB_EG_PerimetreFiness as DECIMAL) END
 	, CASE
-		WHEN (perimetre_SI_APA.CodeRegion = '75' OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL 
+		WHEN (perimetre_SI_APA.CodeRegion IN ('76','02','24','75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL 
 		WHEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness 
 			AND ROUND(peuplement_SI_APA_actuel.DC_TauxPeuplement,2) < 1.0 
 			THEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness - peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise

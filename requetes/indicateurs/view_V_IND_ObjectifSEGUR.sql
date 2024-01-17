@@ -117,11 +117,10 @@ SELECT
 	, peuplement.NB_EG_PeuplementFinalise AS NB_EG_FinaliseReference
 	, peuplement.DC_TauxPeuplement AS DC_TauxReference
 	, peuplement.DC_ObjectifSEGUR
-	, CASE WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL ELSE peuplement_actuel.NB_EG_PerimetreFiness END AS NB_EG_PerimetreActuel
-	, CASE WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL ELSE peuplement_actuel.NB_EG_PeuplementFinalise END AS NB_EG_FinaliseActuel
-	, CASE WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL ELSE peuplement_actuel.DC_TauxPeuplement END AS DC_TauxActuel
+	, peuplement_actuel.NB_EG_PerimetreFiness AS NB_EG_PerimetreActuel
+	, peuplement_actuel.NB_EG_PeuplementFinalise AS NB_EG_FinaliseActuel
+	, peuplement_actuel.DC_TauxPeuplement AS DC_TauxActuel
 	, CASE 
-		WHEN peuplement.CodeRegion IN ('76','02','24') THEN NULL 
 		WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
 		WHEN ROUND(peuplement_actuel.DC_TauxPeuplement,2) >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
 		ELSE CEILING((peuplement_actuel.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement_actuel.NB_EG_PeuplementFinalise)
@@ -144,15 +143,15 @@ SELECT
 	, NULL
 	, CASE WHEN perimetre_SI_APA.NB_EG_PerimetreFiness = 0 THEN 0 ELSE 1.0 END
 	, peuplement_SI_APA_actuel.NB_EG_PerimetreFiness
-	, CASE WHEN perimetre_SI_APA.CodeRegion IN ('76','02','24','75') THEN NULL ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise END
+	, CASE WHEN perimetre_SI_APA.CodeRegion IN ('75') THEN NULL ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise END
 	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
 	, CASE 
-		WHEN (perimetre_SI_APA.CodeRegion IN ('76','02','24','75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL
+		WHEN (perimetre_SI_APA.CodeRegion IN ('75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL
 		WHEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness THEN peuplement_SI_APA_actuel.DC_TauxPeuplement
 		WHEN peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise > perimetre_SI_APA.NB_EG_PerimetreFiness THEN 1.0
 		ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise / CAST(perimetre_SI_APA.NB_EG_PerimetreFiness as DECIMAL) END
 	, CASE
-		WHEN (perimetre_SI_APA.CodeRegion IN ('76','02','24','75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL 
+		WHEN (perimetre_SI_APA.CodeRegion IN ('75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL 
 		WHEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness 
 			AND ROUND(peuplement_SI_APA_actuel.DC_TauxPeuplement,2) < 1.0 
 			THEN peuplement_SI_APA_actuel.NB_EG_PerimetreFiness - peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise

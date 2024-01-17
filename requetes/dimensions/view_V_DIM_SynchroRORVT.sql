@@ -23,7 +23,6 @@ WITH PeuplementROR AS (
 	NumFINESS_EG
 	,FIRST_VALUE(StatutPeuplement) OVER(PARTITION BY NumFINESS_EG ORDER BY StatutPeuplement ASC) AS StatutPeuplement
 FROM DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_EG
-WHERE FG_PerimetreSuiviPeuplement = '1'
 )
 
 

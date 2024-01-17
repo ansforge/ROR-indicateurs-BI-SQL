@@ -162,16 +162,15 @@ GROUP BY CP6.CodeRegion, EntiteGeographique.CodeDepartement, NOSCategorieEG.Doma
 UNION ALL
 -- Exigence Qualite CP4
 SELECT
-    CONCAT('CP4|', CodeRegion,'|',CodeDepartement,'|', ISNULL(SecteurEG,'Non defini'))
+    CONCAT('CP4|', CodeRegion,'|',CodeDepartement,'|', DomaineROR)
     ,'CP4'
 	,CodeRegion
     ,CodeDepartement
-    ,ISNULL(SecteurEG,'Non defini')
+    ,DomaineROR
     ,COUNT(NumFINESS_EG)
     ,COUNT(CASE WHEN StatutPeuplement <> 'Finalise' THEN NumFINESS_EG END)
 FROM DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_EG
-WHERE FG_PerimetreSuiviPeuplement = '1'
-GROUP BY CodeRegion, CodeDepartement, ISNULL(SecteurEG,'Non defini')
+GROUP BY CodeRegion, CodeDepartement, DomaineROR
 UNION ALL
 -- Exigence Qualite CO1
 SELECT

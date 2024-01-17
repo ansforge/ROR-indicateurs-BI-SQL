@@ -18,20 +18,19 @@ SELECT
 	,'trimestre' AS Periodicite
 	,CodeRegion
 	,CodeDepartement
-	,ChampActivite
-	,CodeCategorieEG
-	,SecteurEG
-	,TypePerimetre
+	,TypeActivite AS ChampActivite
+	,CodeCategorieEG_FINESS AS CodeCategorieEG
+	,DomaineROR AS SecteurEG
+	,TypePerimetreROR AS TypePerimetre
 	,COUNT(*) AS NB_EG_PerimetreFiness
 	,COUNT(CASE WHEN StatutPeuplement = 'Finalise' THEN NumFINESS_EG END) AS NB_EG_PeuplementFinalise
 	,COUNT(CASE WHEN StatutPeuplement = 'En cours' THEN NumFINESS_EG END) AS NB_EG_PeuplementEnCours
 	,COUNT(CASE WHEN StatutPeuplement = 'A faire' THEN NumFINESS_EG END) AS NB_EG_PeuplementAFaire
 FROM DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_EG
 -- Filtre sur le flag pour recuperer de la table source uniquement le perimetre suivi
-WHERE FG_PerimetreSuiviPeuplement = 1
 GROUP BY CodeRegion
 ,CodeDepartement
-,ChampActivite
-,CodeCategorieEG
-,TypePerimetre
-,SecteurEG
+,TypeActivite
+,CodeCategorieEG_FINESS
+,TypePerimetreROR
+,DomaineROR

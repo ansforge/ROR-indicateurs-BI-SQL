@@ -12,11 +12,11 @@ SELECT
     END AS EtatROR
 	,Ror.DateFermeture AS DateFermetureROR
 	,CASE 
+        WHEN Finess.nmfinessetab_stru IS NULL  THEN 'Non rapproché'
         WHEN Finess.cdconstatcaducite_stru = 'O' THEN 'Caduc'
 		WHEN Finess.dtfermestruct_stru IS NULL THEN 'Ouvert'
 		WHEN Finess.cdtypefermestruct_stru = 'PRO' THEN 'Fermé provisoirement'
 		WHEN Finess.dtfermestruct_stru IS NOT NULL THEN 'Fermé définitivement'
-        ELSE 'Non rapproché'
     END AS EtatFiness
 	,Finess.dtfermestruct_stru AS DateFermetureFiness
     ,CASE 

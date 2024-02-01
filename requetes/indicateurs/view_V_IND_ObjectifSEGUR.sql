@@ -103,6 +103,7 @@ GROUP BY DT_Reference, CodeRegion, Domaine
 	GROUP BY DT_Reference, CodeRegion, CodeDepartement
 )
 
+, objectifs AS (
 -- Objectifs SEGUR ROR perimetre historique
 SELECT 
 	peuplement.CodeRegion
@@ -117,6 +118,7 @@ SELECT
 	, peuplement.NB_EG_PeuplementFinalise AS NB_EG_FinaliseReference
 	, peuplement.DC_TauxPeuplement AS DC_TauxReference
 	, peuplement.DC_ObjectifSEGUR
+	, CEILING((peuplement.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement.NB_EG_PeuplementFinalise) AS NB_ResteAFaireReference
 	, peuplement_actuel.NB_EG_PerimetreFiness AS NB_EG_PerimetreActuel
 	, peuplement_actuel.NB_EG_PeuplementFinalise AS NB_EG_FinaliseActuel
 	, peuplement_actuel.DC_TauxPeuplement AS DC_TauxActuel
@@ -142,6 +144,7 @@ SELECT
 	, NULL
 	, NULL
 	, CASE WHEN perimetre_SI_APA.NB_EG_PerimetreFiness = 0 THEN 0 ELSE 1.0 END
+	, NULL
 	, peuplement_SI_APA_actuel.NB_EG_PerimetreFiness
 	, CASE WHEN perimetre_SI_APA.CodeRegion IN ('75') THEN NULL ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise END
 	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
@@ -175,6 +178,7 @@ SELECT
 	, synchronisationVT.NB_EG_SynchronisationFinalise
 	, synchronisationVT.DC_TauxSynchronisation
 	, synchronisationVT.DC_ObjectifSEGUR
+	, CEILING((synchronisationVT.NB_EG_PerimetreSynchronisation * synchronisationVT.DC_ObjectifSEGUR) - synchronisationVT.NB_EG_SynchronisationFinalise)
 	, ISNULL(synchronisationVT_actuel.NB_EG_PerimetreSynchronisation,0)
 	, ISNULL(synchronisationVT_actuel.NB_EG_SynchronisationFinalise,0)
 	, ISNULL(synchronisationVT_actuel.DC_TauxSynchronisation,0)
@@ -200,6 +204,7 @@ SELECT
 	, synchronisationVT_SI_APA.NB_EG_SynchronisationFinalise
 	, synchronisationVT_SI_APA.DC_TauxSynchronisation
 	, CASE WHEN synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation = 0 THEN 0 ELSE 0.8 END AS DC_ObjectifSEGUR
+	, CEILING((synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation * 0.8) - synchronisationVT_SI_APA.NB_EG_SynchronisationFinalise)
 	, synchronisationVT_SI_APA_actuel.NB_EG_PerimetreSynchronisation
 	, synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise
 	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
@@ -225,3 +230,43 @@ LEFT JOIN synchronisationVT_SI_APA AS synchronisationVT_SI_APA_actuel
 	AND synchronisationVT_SI_APA.CodeDepartement = synchronisationVT_SI_APA_actuel.CodeDepartement 
 	AND synchronisationVT_SI_APA_actuel.DT_Reference = '2023-12-31'
 WHERE synchronisationVT_SI_APA.DT_Reference = '2023-09-30'
+)
+
+SELECT
+	CodeRegion
+    ,ReferenceObjectifSEGUR
+    ,LibelleObjectifSEGUR
+    ,AnneObjectifSEGUR
+    ,CodeDepartement
+    ,NB_EG_PerimetreReference
+    ,NB_EG_FinaliseReference
+    ,DC_TauxReference
+    ,DC_ObjectifSEGUR
+    ,NB_ResteAFaireReference
+    ,NB_EG_PerimetreActuel
+    ,NB_EG_FinaliseActuel
+    ,DC_TauxActuel
+    ,NB_ResteAFaireActuel
+FROM objectifs
+UNION ALL 
+SELECT 
+	'00'
+	,ReferenceObjectifSEGUR
+    ,LibelleObjectifSEGUR
+    ,AnneObjectifSEGUR
+	,'-3'
+	, SUM(NB_EG_PerimetreReference)
+	, SUM(NB_EG_FinaliseReference)
+	, ROUND(SUM(NB_EG_FinaliseReference) / CAST(SUM(NB_EG_PerimetreReference) AS decimal),2)
+	, CASE 
+		WHEN ReferenceObjectifSEGUR = '2.3d SI APA' THEN 1
+		WHEN ReferenceObjectifSEGUR = '2.3e SI APA' THEN 0.8
+		ELSE ROUND((SUM(NB_EG_FinaliseReference) + SUM(NB_ResteAFaireReference)) / CAST(SUM(NB_EG_PerimetreReference) AS decimal),2)
+	END
+	, SUM(NB_ResteAFaireReference)
+	, SUM(NB_EG_PerimetreActuel)
+	, SUM(NB_EG_FinaliseActuel)
+	, ROUND(SUM(NB_EG_FinaliseActuel) / CAST(SUM(NB_EG_PerimetreActuel) AS decimal),2)
+	, SUM(NB_ResteAFaireActuel)
+FROM objectifs
+GROUP BY ReferenceObjectifSEGUR, LibelleObjectifSEGUR, AnneObjectifSEGUR

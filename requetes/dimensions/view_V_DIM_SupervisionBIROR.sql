@@ -21,7 +21,8 @@ SELECT
 	,MAX(Date_UpdateAnomalie)
 	,DT_UPDATE_TECH
 	,COUNT(*)
-FROM BIROR_DWH_SNAPSHOT.dbo.T_DIM_Anomalies
+-- Modifier la base de données lorsqu'un raffraichement supplémentaire du snapshot aura été réalisé
+FROM BIROR_DWH.dbo.T_DIM_Anomalies
 GROUP BY CodeRegion, DT_UPDATE_TECH
 UNION ALL
 SELECT

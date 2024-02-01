@@ -5,10 +5,10 @@ CREATE OR ALTER VIEW DLAB_002.V_DIM_SuiviPeuplementROR_EG AS
 /*
 Description : Vue permettant de calculer le statut de peuplement au niveau Entité Géographique (établissement)
 Sources : 
-  - V_DIM_CiblePeuplementROR_EG (DATALAB)
+  - V_DIM_AutorisationFINESS (DATALAB)
+  - V_REF_J55_CategorieEG (DATALAB)
   - V_DIM_SuiviPeuplementROR_UE (DATALAB)
   - T_DIM_EntiteGeographique (BIROR_DWH)
-  - T_REF_NOS (BIROR_DWH)
 Vue utilisée par :
   - V_IND_SuiviPeuplementROR (DATALAB)
   - V_DIM_SynchroRORVT (DATALAB)
@@ -115,7 +115,7 @@ SELECT
 			WHEN finess.CodeCategorieEG_FINESS IN ('182','183','186','188','189','190','192','194'
 			,'195','196','198','221','238','246','249','252','253','255','370','377','379'
 			,'382','390','395','396','402','437','445','446','448','449') THEN 'PH'
-			WHEN finess.CodeCategorieEG_FINESS IN ('209','354','460') THEN 'Services PAPH'
+			WHEN finess.CodeCategorieEG_FINESS IN ('209','354','460') THEN 'ESMS Domicile'
 			WHEN finess.CodeCategorieEG_FINESS IN ('178','197','228','165','180','213','231','608') THEN 'Autres MS'
 			WHEN finess.CodeCategorieEG_FINESS IN ('604','606') THEN 'Coordination'
 			WHEN finess.CodeCategorieEG_FINESS IN ('603') THEN 'Ville' 

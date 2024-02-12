@@ -16,6 +16,8 @@ SELECT
 		WHEN EntiteGeographique.CodeRegion IN ('01','02','03','04','06') THEN LEFT(Lieu.CodeNOS_CommuneCog,3)
 		ELSE LEFT(Lieu.CodeNOS_CommuneCog,2) 
 	END AS CodeDepartement
+	,ContactTelephone.AdresseTelecom AS TelephoneResponsableEG
+	,ContactEmail.AdresseTelecom AS EmailResponsableEG
 	,EntiteGeographique.DateFermeture
 	,EntiteGeographique.CodeNOS_TypeFermeture
 	,EntiteGeographique.Meta_DateMiseJour AS DateMajROR
@@ -31,6 +33,16 @@ LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_OrganisationInterne AS OrganisationIntern
 	AND OrganisationInterne.CodeNOS_TypeOI = '4'
 LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_Lieu AS Lieu
     ON EntiteGeographique.ID_EntiteGeographique = Lieu.FK_StructureParente
+LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_Telecommunication AS ContactEmail
+	ON EntiteGeographique.ID_EntiteGeographique = ContactEmail.FK_StructureParente
+	AND ContactEmail.TypeParent = 'EG' 
+	AND (ContactEmail.CodeNOS_FonctionContact = '01' OR ContactEmail.CodeNOS_NatureContact = '10')
+	ANd ContactEmail.CodeNOS_Canal = '3'
+LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_Telecommunication AS ContactTelephone
+	ON EntiteGeographique.ID_EntiteGeographique = ContactTelephone.FK_StructureParente
+	AND ContactTelephone.TypeParent = 'EG' 
+	AND (ContactTelephone.CodeNOS_FonctionContact = '01' OR ContactTelephone.CodeNOS_NatureContact = '10')
+	ANd ContactTelephone.CodeNOS_Canal = '2'
 GROUP BY EntiteGeographique.ID_EntiteGeographique
     ,EntiteGeographique.IdNat_Struct
     ,EntiteGeographique.UniqueID
@@ -44,6 +56,8 @@ GROUP BY EntiteGeographique.ID_EntiteGeographique
 		WHEN EntiteGeographique.CodeRegion IN ('01','02','03','04','06') THEN LEFT(Lieu.CodeNOS_CommuneCog,3)
 		ELSE LEFT(Lieu.CodeNOS_CommuneCog,2) 
 	END
+	,ContactTelephone.AdresseTelecom
+	,ContactEmail.AdresseTelecom
 	,EntiteGeographique.DateFermeture
 	,EntiteGeographique.CodeNOS_TypeFermeture
 	,EntiteGeographique.Meta_DateMiseJour

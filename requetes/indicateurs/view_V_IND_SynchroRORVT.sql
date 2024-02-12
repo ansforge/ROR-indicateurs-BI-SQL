@@ -57,7 +57,7 @@ SELECT
 	,PerimetreVT.DomaineVT
 	,PerimetreVT.TypePerimetre
 	,PerimetreVT.CodeCategorieEG_Finess
-	,ISNULL(PerimetreROR.NB_EG,0) AS Nb_EG_PerimetreROR
+	,ISNULL(PerimetreROR.NB_EG,0) AS NB_EG_PerimetreROR
 	,PerimetreVT.NB_EG_PerimetreVT
 	,PerimetreVT.NB_EG_SynchronisationFinalise
 	,PerimetreVT.DT_MAJ_Fichier

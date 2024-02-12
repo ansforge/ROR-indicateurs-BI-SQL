@@ -9,7 +9,7 @@ Version de la vue : 2.0
 Notes derniere evolution : Modification de la structure de la table et intégration du périmètre SI APA
 Sources : 
   - T_DIM_ImportSynchroRORVT (DATALAB)
-  - V_DIM_SuiviPeuplementROR_EG (DATALAB)
+  - V_DIM_AutorisationFINESS (DATALAB)
   - dwh_structure (BICOEUR)
   - ref_commune (BICOEUR)
   - ref_departement (BICOEUR)
@@ -18,15 +18,7 @@ Vue utilisee par :
   - V_IND_SynchroRORVT (DATALAB)
 */
 
-WITH PeuplementROR AS (
-	SELECT DISTINCT
-	NumFINESS_EG
-	,FIRST_VALUE(StatutPeuplement) OVER(PARTITION BY NumFINESS_EG ORDER BY StatutPeuplement ASC) AS StatutPeuplement
-FROM DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_EG
-)
-
-
-, Requete AS (
+WITH Requete AS (
 SELECT
 	COALESCE(r.cdregion_regi,vt.CodeRegion,'-2') AS CodeRegion
 	, ISNULL(d.cddept_dept,'-2') AS CodeDepartement
@@ -51,8 +43,6 @@ SELECT
 	, vt.EtatSynchronisationROR
 	, vt.DateSynchronisation
 	, ISNULL(s.categetab_stru,'-1') AS CodeCategorieEG_Finess
-	, CASE WHEN ror.NumFINESS_EG IS NOT NULL THEN 'O' ELSE 'N' END AS SuiviPeuplementROR
-	, ror.StatutPeuplement AS StatutPeuplementROR
 	, CASE 
 		WHEN s.nmfinessetab_stru IS NULL THEN 'Non identifié'
 		WHEN dtfermestruct_stru IS NOT NULL AND s.cdtypefermestruct_stru = 'PRO' THEN 'Fermeture provisoire'
@@ -65,17 +55,14 @@ SELECT
 	, s.dtouvertstruct_stru AS DateOuvertureFiness
 	, s.dtfermestruct_stru AS DateFermetureFiness
 FROM DATALAB.DLAB_002.T_DIM_ImportSynchroRORVT AS vt
--- Croisement avec les données de suivi de peuplement pour récupérer le statut de peuplement des établissements
-LEFT JOIN PeuplementROR AS ror
-	ON vt.Finess = ror.NumFINESS_EG
 -- Croisement avec les données Finess pour récupérer l'état de l'établissement
 LEFT JOIN BICOEUR_DWH_SNAPSHOT.dbo.dwh_structure AS s
 	ON vt.Finess = s.nmfinessetab_stru AND s.topsource_stru = 'FINESS'
-LEFT JOIN BICOEUR_DWH_SNAPSHOT.dbo.ref_commune as c
+LEFT JOIN BICOEUR_DWH_SNAPSHOT.dbo.ref_commune AS c
 	ON s.idcommune_stru = c.idcommune_comm
-LEFT JOIN BICOEUR_DWH_SNAPSHOT.dbo.ref_departement as d
+LEFT JOIN BICOEUR_DWH_SNAPSHOT.dbo.ref_departement AS d
 	ON c.iddepartement_comm = d.iddept_dept
-LEFT JOIN BICOEUR_DWH_SNAPSHOT.dbo.ref_region as r
+LEFT JOIN BICOEUR_DWH_SNAPSHOT.dbo.ref_region AS r
 	ON d.idregion_dept = r.idregion_regi
 WHERE s.categetab_stru NOT IN ('460','209')
 -- Le périmètre de synchronisation pour les structures du périmètre SI APA est différent
@@ -92,8 +79,6 @@ SELECT
 	, vt.EtatSynchronisationROR
 	, vt.DateSynchronisation
 	, Finess.CodeCategorieEG_FINESS
-	, CASE WHEN ror.NumFINESS_EG IS NOT NULL THEN 'O' ELSE 'N' END
-	, ror.StatutPeuplement
 	, CASE 
 		WHEN Finess.DateOuvertureFINESS IS NULL THEN 'Autorisé'
 		ELSE 'Ouvert'
@@ -104,8 +89,6 @@ SELECT
 FROM DATALAB.DLAB_002.V_DIM_AutorisationFINESS AS Finess
 LEFT JOIN DATALAB.DLAB_002.T_DIM_ImportSynchroRORVT AS vt
 	ON Finess.NumFINESS_EG = vt.Finess
-LEFT JOIN PeuplementROR AS ror
-	ON Finess.NumFINESS_EG = ror.NumFINESS_EG
 WHERE CodeCategorieEG_FINESS IN ('460','209')
 )
 
@@ -125,7 +108,5 @@ SELECT
 	,DateAutorisationFiness
 	,DateOuvertureFiness
 	,DateFermetureFiness
-	,SuiviPeuplementROR
-	,StatutPeuplementROR
 	, CAST(DATEADD(d,1,MAX(DateSynchronisation) OVER ()) AS date) AS DT_MAJ_Fichier
 FROM Requete

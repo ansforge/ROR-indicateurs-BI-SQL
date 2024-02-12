@@ -64,93 +64,93 @@ SELECT CodeRegion
 )
 	
 SELECT
-		perimetre_sanitaire.CodeRegion
-		,CodeDepartement
-		,perimetre_sanitaire.NumFINESS_EG
-		,DateOuvertureFINESS
-		,DenominationEG_FINESS
-		,CodeCategorieEG_FINESS
-		,TypePerimetreROR
-		,DomaineROR
-		,TypeActivite
-		,eg.UniqueID AS IdentifiantTechniqueROR
-		,eg.DenominationEG AS DenominationEG_ROR
-		,CASE 
-			WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) = COUNT(offres.ID_OrganisationInterne) THEN 'Finalise'
-			WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) > 0 THEN 'En cours'
-			ELSE 'A faire'
-		END AS StatutPeuplement
-		,COUNT(offres.ID_OrganisationInterne) AS NB_offres
-		,COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementFinalise
-		,COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementEnCours
-	FROM perimetre_sanitaire
-	LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_EntiteGeographique AS eg
-		ON perimetre_sanitaire.NumFINESS_EG = eg.NumFINESS
-	LEFT JOIN DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_UE AS offres
-		ON eg.ID_EntiteGeographique = offres.FK_EntiteGeographique 
-		AND perimetre_sanitaire.TypeActivite = offres.ChampActivite
-	GROUP BY perimetre_sanitaire.CodeRegion
-		,CodeDepartement
-		,perimetre_sanitaire.NumFINESS_EG
-		,DateOuvertureFINESS
-		,DenominationEG_FINESS
-		,CodeCategorieEG_FINESS
-		,TypePerimetreROR
-		,DomaineROR
-		,TypeActivite
-		,eg.UniqueID
-		,eg.DenominationEG
-	UNION ALL
-	SELECT
-		finess.CodeRegion
-		,finess.CodeDepartement
-		,finess.NumFINESS_EG AS NumFINESS_EG
-		,finess.DateOuvertureFINESS
-		,finess.DenominationEG_FINESS
-		,finess.CodeCategorieEG_FINESS
-		,V_REF_J55_CategorieEG.TypePerimetreROR
-		,V_REF_J55_CategorieEG.DomaineROR
-		,CASE 
-			WHEN finess.CodeCategorieEG_FINESS IN ('202','207','381','500','501','502') THEN 'PA'
-			WHEN finess.CodeCategorieEG_FINESS IN ('182','183','186','188','189','190','192','194'
-			,'195','196','198','221','238','246','249','252','253','255','370','377','379'
-			,'382','390','395','396','402','437','445','446','448','449') THEN 'PH'
-			WHEN finess.CodeCategorieEG_FINESS IN ('209','354','460') THEN 'ESMS Domicile'
-			WHEN finess.CodeCategorieEG_FINESS IN ('178','197','228','165','180','213','231','608') THEN 'Autres MS'
-			WHEN finess.CodeCategorieEG_FINESS IN ('604','606') THEN 'Coordination'
-			WHEN finess.CodeCategorieEG_FINESS IN ('603') THEN 'Ville' 
-			ELSE 'Non défini'
-		END AS TypeActivite
-		,eg.UniqueID AS IdentifiantTechniqueROR
-		,eg.DenominationEG AS DenominationEG_ROR
-		,CASE 
-			WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) = COUNT(offres.ID_OrganisationInterne) THEN 'Finalise'
-			WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) > 0 THEN 'En cours'
-			ELSE 'A faire'
-		END AS StatutPeuplement
-		,COUNT(offres.ID_OrganisationInterne) AS NB_offres
-		,COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementFinalise
-		,COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementEnCours
-	FROM DATALAB.DLAB_002.V_DIM_AutorisationFINESS AS finess
-	LEFT JOIN DATALAB.DLAB_002.V_REF_J55_CategorieEG AS V_REF_J55_CategorieEG
-		ON finess.CodeCategorieEG_FINESS = V_REF_J55_CategorieEG.code
-	LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_EntiteGeographique AS eg
-		ON finess.NumFINESS_EG = eg.NumFINESS
-	LEFT JOIN DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_UE AS offres
-		ON eg.ID_EntiteGeographique = offres.FK_EntiteGeographique
-	-- Liste des catégories d'établissement hors sanitaire suivies dans le périmètre ROR
-	WHERE finess.CodeCategorieEG_FINESS IN ('165',	'178',	'180',	'182',	'183',	'186',	'188',	'189',	'190',
-	'192',	'194',	'195',	'196',	'197',	'198',	'202',	'207',	'209',	'213',	'221',	'228',	'231',	'238',
-	'246',	'249',	'252',	'253',	'255',	'354',	'370',	'377',	'379',	'381',	'382',	'390',	'395',	'396',
-	'402',	'437',	'445',	'446',	'448',	'449',	'460',	'500',	'501',	'502',	'603',	'604',	'606',	'608',
-	'617',	'618')
-	GROUP BY finess.CodeRegion
-		,finess.CodeDepartement
-		,finess.NumFINESS_EG
-		,finess.DateOuvertureFINESS
-		,finess.DenominationEG_FINESS
-		,finess.CodeCategorieEG_FINESS
-		,V_REF_J55_CategorieEG.TypePerimetreROR
-		,V_REF_J55_CategorieEG.DomaineROR
-		,eg.UniqueID
-		,eg.DenominationEG
+	perimetre_sanitaire.CodeRegion
+	,CodeDepartement
+	,perimetre_sanitaire.NumFINESS_EG
+	,DateOuvertureFINESS
+	,DenominationEG_FINESS
+	,CodeCategorieEG_FINESS
+	,TypePerimetreROR
+	,DomaineROR
+	,TypeActivite
+	,eg.UniqueID AS IdentifiantTechniqueROR
+	,eg.DenominationEG AS DenominationEG_ROR
+	,CASE 
+		WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) = COUNT(offres.ID_OrganisationInterne) THEN 'Finalise'
+		WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) > 0 THEN 'En cours'
+		ELSE 'A faire'
+	END AS StatutPeuplement
+	,COUNT(offres.ID_OrganisationInterne) AS NB_offres
+	,COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementFinalise
+	,COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementEnCours
+FROM perimetre_sanitaire
+LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_EntiteGeographique AS eg
+	ON perimetre_sanitaire.NumFINESS_EG = eg.NumFINESS
+LEFT JOIN DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_UE AS offres
+	ON eg.ID_EntiteGeographique = offres.FK_EntiteGeographique 
+	AND perimetre_sanitaire.TypeActivite = offres.ChampActivite
+GROUP BY perimetre_sanitaire.CodeRegion
+	,CodeDepartement
+	,perimetre_sanitaire.NumFINESS_EG
+	,DateOuvertureFINESS
+	,DenominationEG_FINESS
+	,CodeCategorieEG_FINESS
+	,TypePerimetreROR
+	,DomaineROR
+	,TypeActivite
+	,eg.UniqueID
+	,eg.DenominationEG
+UNION ALL
+SELECT
+	finess.CodeRegion
+	,finess.CodeDepartement
+	,finess.NumFINESS_EG AS NumFINESS_EG
+	,finess.DateOuvertureFINESS
+	,finess.DenominationEG_FINESS
+	,finess.CodeCategorieEG_FINESS
+	,V_REF_J55_CategorieEG.TypePerimetreROR
+	,V_REF_J55_CategorieEG.DomaineROR
+	,CASE 
+		WHEN finess.CodeCategorieEG_FINESS IN ('202','207','381','500','501','502') THEN 'PA'
+		WHEN finess.CodeCategorieEG_FINESS IN ('182','183','186','188','189','190','192','194'
+		,'195','196','198','221','238','246','249','252','253','255','370','377','379'
+		,'382','390','395','396','402','437','445','446','448','449') THEN 'PH'
+		WHEN finess.CodeCategorieEG_FINESS IN ('209','354','460') THEN 'ESMS Domicile'
+		WHEN finess.CodeCategorieEG_FINESS IN ('178','197','228','165','180','213','231','608') THEN 'Autres MS'
+		WHEN finess.CodeCategorieEG_FINESS IN ('604','606') THEN 'Coordination'
+		WHEN finess.CodeCategorieEG_FINESS IN ('603') THEN 'Ville' 
+		ELSE 'Non défini'
+	END AS TypeActivite
+	,eg.UniqueID AS IdentifiantTechniqueROR
+	,eg.DenominationEG AS DenominationEG_ROR
+	,CASE 
+		WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) = COUNT(offres.ID_OrganisationInterne) THEN 'Finalise'
+		WHEN COUNT(offres.ID_OrganisationInterne) > 0 AND COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) > 0 THEN 'En cours'
+		ELSE 'A faire'
+	END AS StatutPeuplement
+	,COUNT(offres.ID_OrganisationInterne) AS NB_offres
+	,COUNT(CASE WHEN FG_PeuplementFinalise = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementFinalise
+	,COUNT(CASE WHEN FG_PeuplementEncours = 1 THEN offres.ID_OrganisationInterne END) AS NB_offresPeuplementEnCours
+FROM DATALAB.DLAB_002.V_DIM_AutorisationFINESS AS finess
+LEFT JOIN DATALAB.DLAB_002.V_REF_J55_CategorieEG AS V_REF_J55_CategorieEG
+	ON finess.CodeCategorieEG_FINESS = V_REF_J55_CategorieEG.code
+LEFT JOIN BIROR_DWH_SNAPSHOT.dbo.T_DIM_EntiteGeographique AS eg
+	ON finess.NumFINESS_EG = eg.NumFINESS
+LEFT JOIN DATALAB.DLAB_002.V_DIM_SuiviPeuplementROR_UE AS offres
+	ON eg.ID_EntiteGeographique = offres.FK_EntiteGeographique
+-- Liste des catégories d'établissement hors sanitaire suivies dans le périmètre ROR
+WHERE finess.CodeCategorieEG_FINESS IN ('165',	'178',	'180',	'182',	'183',	'186',	'188',	'189',	'190',
+'192',	'194',	'195',	'196',	'197',	'198',	'202',	'207',	'209',	'213',	'221',	'228',	'231',	'238',
+'246',	'249',	'252',	'253',	'255',	'354',	'370',	'377',	'379',	'381',	'382',	'390',	'395',	'396',
+'402',	'437',	'445',	'446',	'448',	'449',	'460',	'500',	'501',	'502',	'603',	'604',	'606',	'608',
+'617',	'618')
+GROUP BY finess.CodeRegion
+	,finess.CodeDepartement
+	,finess.NumFINESS_EG
+	,finess.DateOuvertureFINESS
+	,finess.DenominationEG_FINESS
+	,finess.CodeCategorieEG_FINESS
+	,V_REF_J55_CategorieEG.TypePerimetreROR
+	,V_REF_J55_CategorieEG.DomaineROR
+	,eg.UniqueID
+	,eg.DenominationEG

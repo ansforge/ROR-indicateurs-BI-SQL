@@ -119,18 +119,30 @@ SELECT
 	, peuplement.DC_TauxPeuplement AS DC_TauxReference
 	, peuplement.DC_ObjectifSEGUR
 	, CEILING((peuplement.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement.NB_EG_PeuplementFinalise) AS NB_ResteAFaireReference
-	, peuplement_actuel.NB_EG_PerimetreFiness AS NB_EG_PerimetreActuel
-	, peuplement_actuel.NB_EG_PeuplementFinalise AS NB_EG_FinaliseActuel
-	, peuplement_actuel.DC_TauxPeuplement AS DC_TauxActuel
+	, peuplement_prec_trim.NB_EG_PerimetreFiness AS NB_EG_PerimetrePrecTrimestre
+	, peuplement_prec_trim.NB_EG_PeuplementFinalise AS NB_EG_FinalisePrecTrimestre
+	, peuplement_prec_trim.DC_TauxPeuplement AS DC_TauxPrecTrimestre
 	, CASE 
+		WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
+		WHEN ROUND(peuplement_prec_trim.DC_TauxPeuplement,2) >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
+		ELSE CEILING((peuplement_prec_trim.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement_prec_trim.NB_EG_PeuplementFinalise)
+	  END AS NB_ResteAFairePrecTrimestre
+	, CASE WHEN peuplement.CodeRegion IN ('02','75') THEN NULL ELSE peuplement_actuel.NB_EG_PerimetreFiness END AS NB_EG_PerimetreActuel
+	, CASE WHEN peuplement.CodeRegion IN ('02','75') THEN NULL ELSE peuplement_actuel.NB_EG_PeuplementFinalise END AS NB_EG_FinaliseActuel
+	, CASE WHEN peuplement.CodeRegion IN ('02','75') THEN NULL ELSE peuplement_actuel.DC_TauxPeuplement END AS DC_TauxActuel
+	, CASE 
+		WHEN peuplement.CodeRegion IN ('02','75') THEN NULL
 		WHEN peuplement.DC_ObjectifSEGUR IS NULL THEN NULL
 		WHEN ROUND(peuplement_actuel.DC_TauxPeuplement,2) >= ROUND(peuplement.DC_ObjectifSEGUR,2) THEN 0
 		ELSE CEILING((peuplement_actuel.NB_EG_PerimetreFiness * peuplement.DC_ObjectifSEGUR) - peuplement_actuel.NB_EG_PeuplementFinalise)
 	  END AS NB_ResteAFaireActuel
 FROM peuplement
+LEFT JOIN peuplement AS peuplement_prec_trim
+	ON peuplement.CodeRegion = peuplement_prec_trim.CodeRegion AND peuplement.ChampActivite = peuplement_prec_trim.ChampActivite 
+	AND peuplement_prec_trim.DT_Reference = CAST(DATEADD(q,0,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre precedent
 LEFT JOIN peuplement AS peuplement_actuel
 	ON peuplement.CodeRegion = peuplement_actuel.CodeRegion AND peuplement.ChampActivite = peuplement_actuel.ChampActivite 
-	AND peuplement_actuel.DT_Reference = '2023-12-31'
+	AND peuplement_actuel.DT_Reference = CAST(DATEADD(q,1,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre en cours
 WHERE peuplement.DT_Reference = '2023-06-30'
 -- Objectifs SEGUR ROR SI APA
 UNION ALL
@@ -141,10 +153,27 @@ SELECT
 	, '2023-2024'
 	, perimetre_SI_APA.CodeDepartement
 	, perimetre_SI_APA.NB_EG_PerimetreFiness
-	, NULL
-	, NULL
+	, NULL -- Realise non disponible pour le SI APA car les indicateurs niveau departement n'existaient pas
+	, NULL -- Idem
 	, CASE WHEN perimetre_SI_APA.NB_EG_PerimetreFiness = 0 THEN 0 ELSE 1.0 END
-	, NULL
+	, NULL -- Idem
+	, peuplement_SI_APA_prec_trim.NB_EG_PerimetreFiness
+	, CASE WHEN perimetre_SI_APA.CodeRegion IN ('75') THEN NULL ELSE peuplement_SI_APA_prec_trim.NB_EG_PeuplementFinalise END
+	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
+	, CASE 
+		WHEN (perimetre_SI_APA.CodeRegion IN ('75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL
+		WHEN peuplement_SI_APA_prec_trim.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness THEN peuplement_SI_APA_prec_trim.DC_TauxPeuplement
+		WHEN peuplement_SI_APA_prec_trim.NB_EG_PeuplementFinalise > perimetre_SI_APA.NB_EG_PerimetreFiness THEN 1.0
+		ELSE peuplement_SI_APA_prec_trim.NB_EG_PeuplementFinalise / CAST(perimetre_SI_APA.NB_EG_PerimetreFiness as DECIMAL) END
+	, CASE
+		WHEN (perimetre_SI_APA.CodeRegion IN ('75') OR perimetre_SI_APA.NB_EG_PerimetreFiness = 0) THEN NULL 
+		WHEN peuplement_SI_APA_prec_trim.NB_EG_PerimetreFiness <= perimetre_SI_APA.NB_EG_PerimetreFiness 
+			AND ROUND(peuplement_SI_APA_prec_trim.DC_TauxPeuplement,2) < 1.0 
+			THEN peuplement_SI_APA_prec_trim.NB_EG_PerimetreFiness - peuplement_SI_APA_prec_trim.NB_EG_PeuplementFinalise
+		WHEN peuplement_SI_APA_prec_trim.NB_EG_PerimetreFiness > perimetre_SI_APA.NB_EG_PerimetreFiness 
+			AND ROUND(peuplement_SI_APA_prec_trim.NB_EG_PeuplementFinalise / CAST(perimetre_SI_APA.NB_EG_PerimetreFiness as DECIMAL),2) < 1.0 
+			THEN perimetre_SI_APA.NB_EG_PerimetreFiness - peuplement_SI_APA_prec_trim.NB_EG_PeuplementFinalise
+		ELSE 0 END
 	, peuplement_SI_APA_actuel.NB_EG_PerimetreFiness
 	, CASE WHEN perimetre_SI_APA.CodeRegion IN ('75') THEN NULL ELSE peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise END
 	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
@@ -163,9 +192,12 @@ SELECT
 			THEN perimetre_SI_APA.NB_EG_PerimetreFiness - peuplement_SI_APA_actuel.NB_EG_PeuplementFinalise
 		ELSE 0 END 
 FROM perimetre_SI_APA
+LEFT JOIN peuplement_SI_APA AS peuplement_SI_APA_prec_trim
+	ON perimetre_SI_APA.CodeDepartement = peuplement_SI_APA_prec_trim.CodeDepartement
+	AND peuplement_SI_APA_prec_trim.DT_Reference = CAST(DATEADD(q,0,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre precedent
 LEFT JOIN peuplement_SI_APA AS peuplement_SI_APA_actuel
 	ON perimetre_SI_APA.CodeDepartement = peuplement_SI_APA_actuel.CodeDepartement
-	AND peuplement_SI_APA_actuel.DT_Reference = '2023-12-31'
+	AND peuplement_SI_APA_actuel.DT_Reference = CAST(DATEADD(q,1,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre en cours
 -- Objectifs SEGUR SynchronisationVT perimetre historique
 UNION ALL
 SELECT 
@@ -179,6 +211,14 @@ SELECT
 	, synchronisationVT.DC_TauxSynchronisation
 	, synchronisationVT.DC_ObjectifSEGUR
 	, CEILING((synchronisationVT.NB_EG_PerimetreSynchronisation * synchronisationVT.DC_ObjectifSEGUR) - synchronisationVT.NB_EG_SynchronisationFinalise)
+	, ISNULL(synchronisationVT_prec_trim.NB_EG_PerimetreSynchronisation,0)
+	, ISNULL(synchronisationVT_prec_trim.NB_EG_SynchronisationFinalise,0)
+	, ISNULL(synchronisationVT_prec_trim.DC_TauxSynchronisation,0)
+	, CASE 
+		WHEN synchronisationVT.DC_ObjectifSEGUR = 0 THEN 0
+		WHEN ROUND(synchronisationVT_prec_trim.DC_TauxSynchronisation,2) >= ROUND(synchronisationVT.DC_ObjectifSEGUR,2) THEN 0
+		ELSE CEILING((synchronisationVT_prec_trim.NB_EG_PerimetreSynchronisation * synchronisationVT.DC_ObjectifSEGUR) - synchronisationVT_prec_trim.NB_EG_SynchronisationFinalise)
+	  END
 	, ISNULL(synchronisationVT_actuel.NB_EG_PerimetreSynchronisation,0)
 	, ISNULL(synchronisationVT_actuel.NB_EG_SynchronisationFinalise,0)
 	, ISNULL(synchronisationVT_actuel.DC_TauxSynchronisation,0)
@@ -188,9 +228,14 @@ SELECT
 		ELSE CEILING((synchronisationVT_actuel.NB_EG_PerimetreSynchronisation * synchronisationVT.DC_ObjectifSEGUR) - synchronisationVT_actuel.NB_EG_SynchronisationFinalise)
 	  END
 FROM synchronisationVT
+LEFT JOIN synchronisationVT AS synchronisationVT_prec_trim
+	ON synchronisationVT.CodeRegion = synchronisationVT_prec_trim.CodeRegion 
+	AND synchronisationVT.Domaine = synchronisationVT_prec_trim.Domaine 
+	AND synchronisationVT_prec_trim.DT_Reference = CAST(DATEADD(q,0,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre precedent
 LEFT JOIN synchronisationVT AS synchronisationVT_actuel
-	ON synchronisationVT.CodeRegion = synchronisationVT_actuel.CodeRegion AND synchronisationVT.Domaine = synchronisationVT_actuel.Domaine 
-	AND synchronisationVT_actuel.DT_Reference = '2023-12-31'
+	ON synchronisationVT.CodeRegion = synchronisationVT_actuel.CodeRegion 
+	AND synchronisationVT.Domaine = synchronisationVT_actuel.Domaine 
+	AND synchronisationVT_actuel.DT_Reference = CAST(DATEADD(q,1,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre en cours
 WHERE synchronisationVT.DT_Reference = '2023-06-30'
 -- Objectifs SEGUR SynchronisationVT SI APA
 UNION ALL
@@ -205,6 +250,25 @@ SELECT
 	, synchronisationVT_SI_APA.DC_TauxSynchronisation
 	, CASE WHEN synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation = 0 THEN 0 ELSE 0.8 END AS DC_ObjectifSEGUR
 	, CEILING((synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation * 0.8) - synchronisationVT_SI_APA.NB_EG_SynchronisationFinalise)
+	, synchronisationVT_SI_APA_prec_trim.NB_EG_PerimetreSynchronisation
+	, synchronisationVT_SI_APA_prec_trim.NB_EG_SynchronisationFinalise
+	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
+	, CASE 
+		WHEN synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation = 0 THEN NULL
+		WHEN synchronisationVT_SI_APA_prec_trim.NB_EG_PerimetreSynchronisation <= synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation 
+			THEN synchronisationVT_SI_APA_prec_trim.DC_TauxSynchronisation
+		WHEN synchronisationVT_SI_APA_prec_trim.NB_EG_SynchronisationFinalise > synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation THEN 1.0
+		ELSE synchronisationVT_SI_APA_prec_trim.NB_EG_SynchronisationFinalise / CAST(synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation as DECIMAL) END
+	, CASE 
+		WHEN synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation = 0 THEN NULL
+		WHEN synchronisationVT_SI_APA_prec_trim.NB_EG_PerimetreSynchronisation <= synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation
+			AND ROUND(synchronisationVT_SI_APA_prec_trim.DC_TauxSynchronisation,2) < 0.8 
+			THEN CEILING((synchronisationVT_SI_APA_prec_trim.NB_EG_PerimetreSynchronisation * 0.8) - synchronisationVT_SI_APA_prec_trim.NB_EG_SynchronisationFinalise)
+		WHEN synchronisationVT_SI_APA_prec_trim.NB_EG_PerimetreSynchronisation > synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation 
+			AND ROUND(synchronisationVT_SI_APA_prec_trim.NB_EG_SynchronisationFinalise / CAST(synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation as DECIMAL),2) < 0.8 
+			THEN CEILING((synchronisationVT_SI_APA.NB_EG_PerimetreSynchronisation * 0.8) - synchronisationVT_SI_APA_prec_trim.NB_EG_SynchronisationFinalise)
+		ELSE 0
+	  END
 	, synchronisationVT_SI_APA_actuel.NB_EG_PerimetreSynchronisation
 	, synchronisationVT_SI_APA_actuel.NB_EG_SynchronisationFinalise
 	-- Recalcul du taux de peuplement en fonction de l'hypothese prise dans les objectifs SEGUR 
@@ -225,10 +289,14 @@ SELECT
 		ELSE 0
 	  END
 FROM synchronisationVT_SI_APA
+LEFT JOIN synchronisationVT_SI_APA AS synchronisationVT_SI_APA_prec_trim
+	ON synchronisationVT_SI_APA.CodeRegion = synchronisationVT_SI_APA_prec_trim.CodeRegion 
+	AND synchronisationVT_SI_APA.CodeDepartement = synchronisationVT_SI_APA_prec_trim.CodeDepartement 
+	AND synchronisationVT_SI_APA_prec_trim.DT_Reference = CAST(DATEADD(q,0,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre precedent
 LEFT JOIN synchronisationVT_SI_APA AS synchronisationVT_SI_APA_actuel
 	ON synchronisationVT_SI_APA.CodeRegion = synchronisationVT_SI_APA_actuel.CodeRegion 
 	AND synchronisationVT_SI_APA.CodeDepartement = synchronisationVT_SI_APA_actuel.CodeDepartement 
-	AND synchronisationVT_SI_APA_actuel.DT_Reference = '2023-12-31'
+	AND synchronisationVT_SI_APA_actuel.DT_Reference = CAST(DATEADD(q,1,DATEADD(qq, DATEDIFF(qq,0, GETDATE()), 0))-1 as date) -- Trimestre en cours
 WHERE synchronisationVT_SI_APA.DT_Reference = '2023-09-30'
 )
 
@@ -243,6 +311,10 @@ SELECT
     ,DC_TauxReference
     ,DC_ObjectifSEGUR
     ,NB_ResteAFaireReference
+	,NB_EG_PerimetrePrecTrimestre
+    ,NB_EG_FinalisePrecTrimestre
+    ,DC_TauxPrecTrimestre
+	,NB_ResteAFairePrecTrimestre
     ,NB_EG_PerimetreActuel
     ,NB_EG_FinaliseActuel
     ,DC_TauxActuel
@@ -264,6 +336,10 @@ SELECT
 		ELSE ROUND((SUM(NB_EG_FinaliseReference) + SUM(NB_ResteAFaireReference)) / CAST(SUM(NB_EG_PerimetreReference) AS decimal),2)
 	END
 	, SUM(NB_ResteAFaireReference)
+	, SUM(NB_EG_PerimetrePrecTrimestre)
+    , SUM(NB_EG_FinalisePrecTrimestre)
+	, ROUND(SUM(NB_EG_FinalisePrecTrimestre) / CAST(SUM(NB_EG_PerimetrePrecTrimestre) AS decimal),2)
+	, SUM(NB_ResteAFairePrecTrimestre)
 	, SUM(NB_EG_PerimetreActuel)
 	, SUM(NB_EG_FinaliseActuel)
 	, ROUND(SUM(NB_EG_FinaliseActuel) / CAST(SUM(NB_EG_PerimetreActuel) AS decimal),2)

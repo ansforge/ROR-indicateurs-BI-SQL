@@ -5,6 +5,7 @@ CREATE OR ALTER VIEW V_DIM_ExigenceQualite_ST2_CO4 AS
 SELECT
     EntiteGeographique.CodeRegion
     ,ID_EntiteGeographique
+	,EntiteGeographique.IdNat_Struct
 	,EntiteGeographique.NumFINESS AS NumFINESS_EG_ROR
 	,Finess.nmfinessetab_stru AS NumFINESS_EG_FINESS
     ,EntiteJuridique.NumFINESS AS NumFINESS_EJ_ROR

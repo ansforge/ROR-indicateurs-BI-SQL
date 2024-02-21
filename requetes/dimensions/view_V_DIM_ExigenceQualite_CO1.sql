@@ -40,23 +40,26 @@ SELECT
 		ELSE 'N' 
 	END FG_ConformiteNomOffre
 	,CASE 
-		WHEN OffresUrgences.NB_AO_Urgences > 0 AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0 
-			AND OffresUrgences.NB_AO_UrgencesPediatriques > 0 AND ISNULL(Autorisation.NB_AutorisationUrgencesPediatriques,0) > 0 THEN 'O'
-		WHEN OffresUrgences.NB_AO_Urgences > 0 AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0
-			AND OffresUrgences.NB_AO_UrgencesPediatriques = 0 THEN 'O'
-		WHEN OffresUrgences.NB_AO_UrgencesPediatriques > 0 AND ISNULL(Autorisation.NB_AutorisationUrgencesPediatriques,0) > 0 
-			AND OffresUrgences.NB_AO_Urgences = 0 THEN 'O'
+		WHEN OffresUrgences.NB_AO_Urgences > 0 AND OffresUrgences.NB_AO_UrgencesPediatriques > 0
+			AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0 THEN 'O'
+		WHEN OffresUrgences.NB_AO_Urgences > 0 AND OffresUrgences.NB_AO_UrgencesPediatriques = 0
+			AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0 THEN 'O'
+		WHEN OffresUrgences.NB_AO_UrgencesPediatriques > 0 AND OffresUrgences.NB_AO_Urgences = 0
+			AND (ISNULL(Autorisation.NB_AutorisationUrgencesPediatriques,0) > 0 
+				OR ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0)
+			 THEN 'O'
 		ELSE 'N' 
 	END AS FG_ConformiteAutorisationSoin
 	,CASE 
 		WHEN ((OffresUrgences.NomOffre LIKE '%urgence%' COLLATE French_CI_AI) 
 			OR (OffresUrgences.NomOffre LIKE '%urgences%' COLLATE French_CI_AI))
-			AND ((OffresUrgences.NB_AO_Urgences > 0 AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0 
-				AND OffresUrgences.NB_AO_UrgencesPediatriques > 0 AND ISNULL(Autorisation.NB_AutorisationUrgencesPediatriques,0) > 0 )
-			OR (OffresUrgences.NB_AO_Urgences > 0 AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0
-				AND OffresUrgences.NB_AO_UrgencesPediatriques = 0)
-			OR (OffresUrgences.NB_AO_UrgencesPediatriques > 0 AND ISNULL(Autorisation.NB_AutorisationUrgencesPediatriques,0) > 0 
-				AND OffresUrgences.NB_AO_Urgences = 0))
+			AND ((OffresUrgences.NB_AO_Urgences > 0 AND OffresUrgences.NB_AO_UrgencesPediatriques > 0
+				AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0 )
+			OR (OffresUrgences.NB_AO_Urgences > 0 AND OffresUrgences.NB_AO_UrgencesPediatriques = 0
+				AND ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0)
+			OR (OffresUrgences.NB_AO_UrgencesPediatriques > 0 AND OffresUrgences.NB_AO_Urgences = 0
+				AND (ISNULL(Autorisation.NB_AutorisationUrgencesPediatriques,0) > 0 
+					OR ISNULL(Autorisation.NB_AutorisationUrgences,0) > 0) ) )
 			THEN 'Conforme' 
 		ELSE 'Ecart'
 	END AS StatutExigence
